@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Make-It-Stick-Backend", "Make-It-Stick-Backend\Make-It-Stick-Backend.csproj", "{2FC56BA9-128F-456D-8627-D51DFDFB69FE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2FC56BA9-128F-456D-8627-D51DFDFB69FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FC56BA9-128F-456D-8627-D51DFDFB69FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FC56BA9-128F-456D-8627-D51DFDFB69FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FC56BA9-128F-456D-8627-D51DFDFB69FE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {182F3488-B61A-4E06-8807-DF477592F9E0}
+	EndGlobalSection
+EndGlobal
