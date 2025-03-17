@@ -362,5 +362,5 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-/Config/firebase_credentials.json
-/secrets.json
+Make-It-Stick-Backend/Config/firebase_credentials.json
+Make-It-Stick-Backend/secrets.json
