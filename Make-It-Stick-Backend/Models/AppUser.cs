@@ -7,10 +7,15 @@ namespace Make_It_Stick_Backend.Models
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; set; }              // Cheia primară
+        public int UserId { get; set; }              // Cheia primară
         public string FirebaseUid { get; set; }  // UID-ul generat de Firebase
         public string Email { get; set; }
         public string Username { get; set; }
         public string Name { get; set; }
+
+        public int? DailyReadingGoal { get; set; }
+        public int? YearlyReadingGoal { get; set; }
+
+        public ICollection<LibraryItem>? LibraryItems { get; set; }
     }
 }
