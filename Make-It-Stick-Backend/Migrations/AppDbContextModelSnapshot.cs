@@ -103,7 +103,12 @@ namespace Make_It_Stick_Backend.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("YearlyReadingGoalId")
+                        .HasColumnType("int");
+
                     b.HasKey("BookId");
+
+                    b.HasIndex("YearlyReadingGoalId");
 
                     b.ToTable("Books");
                 });
@@ -146,6 +151,46 @@ namespace Make_It_Stick_Backend.Migrations
                     b.ToTable("LibraryItems");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<int>("BooksRead")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TargetBooks")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("YearlyReadingGoals");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.Book", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.YearlyReadingGoal", null)
+                        .WithMany("Books")
+                        .HasForeignKey("YearlyReadingGoalId");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.LibraryItem", b =>
                 {
                     b.HasOne("Make_It_Stick_Backend.Models.Book", "Book")
@@ -165,9 +210,27 @@ namespace Make_It_Stick_Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
+                        .WithMany("YearlyReadingGoals")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.AppUser", b =>
                 {
                     b.Navigation("LibraryItems");
+
+                    b.Navigation("YearlyReadingGoals");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
+                {
+                    b.Navigation("Books");
                 });
 #pragma warning restore 612, 618
         }

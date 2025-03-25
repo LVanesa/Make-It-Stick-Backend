@@ -17,5 +17,7 @@ namespace Make_It_Stick_Backend.Models
         public int? YearlyReadingGoal { get; set; }
 
         public ICollection<LibraryItem>? LibraryItems { get; set; }
+
+        public ICollection<YearlyReadingGoal>? YearlyReadingGoals { get; set; }
     }
 }

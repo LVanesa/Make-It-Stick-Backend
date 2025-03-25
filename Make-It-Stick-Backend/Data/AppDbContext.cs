@@ -14,6 +14,7 @@ namespace Make_It_Stick_Backend.Data
         public DbSet<Book> Books { get; set; }
         public DbSet<AppUser> Users { get; set; }
         public DbSet<LibraryItem> LibraryItems { get; set; }
+        public DbSet<YearlyReadingGoal> YearlyReadingGoals { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // Configurări suplimentare, dacă este necesar
@@ -32,6 +33,11 @@ namespace Make_It_Stick_Backend.Data
                 .WithMany()
                 .HasForeignKey(li => li.BookId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<YearlyReadingGoal>()
+            .HasOne(y => y.User)
+            .WithMany(u => u.YearlyReadingGoals)
+            .HasForeignKey(y => y.UserId);
 
         }
 
