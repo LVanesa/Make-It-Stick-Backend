@@ -30,9 +30,6 @@ namespace Make_It_Stick_Backend.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserId"), 1L, 1);
 
-                    b.Property<int?>("DailyReadingGoal")
-                        .HasColumnType("int");
-
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -48,9 +45,6 @@ namespace Make_It_Stick_Backend.Migrations
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("YearlyReadingGoal")
-                        .HasColumnType("int");
 
                     b.HasKey("UserId");
 
@@ -113,6 +107,68 @@ namespace Make_It_Stick_Backend.Migrations
                     b.ToTable("Books");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.DailyProgress", b =>
+                {
+                    b.Property<int>("DailyProgressId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DailyProgressId"), 1L, 1);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("GoalReached")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LastUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TotalMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("DailyProgressId");
+
+                    b.HasIndex("UserId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("DailyProgresses");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.DailyReadingGoal", b =>
+                {
+                    b.Property<int>("DailyReadingGoalId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DailyReadingGoalId"), 1L, 1);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MinutesPerDay")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("DailyReadingGoalId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("DailyReadingGoals");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.LibraryItem", b =>
                 {
                     b.Property<int>("LibraryItemId")
@@ -122,6 +178,9 @@ namespace Make_It_Stick_Backend.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LibraryItemId"), 1L, 1);
 
                     b.Property<int>("BookId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurrentPage")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("DateAdded")
@@ -134,6 +193,9 @@ namespace Make_It_Stick_Backend.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<int>("LibraryShelf")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TotalPages")
                         .HasColumnType("int");
 
                     b.Property<int>("UserId")
@@ -149,6 +211,45 @@ namespace Make_It_Stick_Backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("LibraryItems");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.ReadingSession", b =>
+                {
+                    b.Property<int>("ReadingSessionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ReadingSessionId"), 1L, 1);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("Duration")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EndPage")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("LibraryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PagesRead")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StartPage")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ReadingSessionId");
+
+                    b.HasIndex("LibraryItemId");
+
+                    b.ToTable("ReadingSessions");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
@@ -191,6 +292,28 @@ namespace Make_It_Stick_Backend.Migrations
                         .HasForeignKey("YearlyReadingGoalId");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.DailyProgress", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
+                        .WithMany("DailyProgresses")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.DailyReadingGoal", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
+                        .WithOne("DailyReadingGoal")
+                        .HasForeignKey("Make_It_Stick_Backend.Models.DailyReadingGoal", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.LibraryItem", b =>
                 {
                     b.HasOne("Make_It_Stick_Backend.Models.Book", "Book")
@@ -210,6 +333,17 @@ namespace Make_It_Stick_Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.ReadingSession", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.LibraryItem", "LibraryItem")
+                        .WithMany("ReadingSessions")
+                        .HasForeignKey("LibraryItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LibraryItem");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
                 {
                     b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
@@ -223,9 +357,19 @@ namespace Make_It_Stick_Backend.Migrations
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.AppUser", b =>
                 {
+                    b.Navigation("DailyProgresses");
+
+                    b.Navigation("DailyReadingGoal")
+                        .IsRequired();
+
                     b.Navigation("LibraryItems");
 
                     b.Navigation("YearlyReadingGoals");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.LibraryItem", b =>
+                {
+                    b.Navigation("ReadingSessions");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>

@@ -10,19 +10,20 @@ using Make_It_Stick_Backend.Models;
 using Make_It_Stick_Backend.Models.Dto;
 using Make_It_Stick_Backend.Services;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Make_It_Stick_Backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class LibraryController : ControllerBase
+    public class LibraryController : BaseController
     {
-        private readonly AppDbContext _context;
+        
+
         private readonly GoogleBooksService _googleBooksService;
 
-        public LibraryController(AppDbContext context, GoogleBooksService googleBooksService)
-        {
-            _context = context;
+
+        public LibraryController(AppDbContext context, GoogleBooksService googleBooksService) : base(context) {
             _googleBooksService = googleBooksService;
         }
 
@@ -54,16 +55,9 @@ namespace Make_It_Stick_Backend.Controllers
     [HttpGet("Counts")]
     public async Task<IActionResult> GetLibraryCounts()
     {
-        // Extrage UID-ul din token (folosește claim-ul "sub" sau ClaimTypes.NameIdentifier)
-        string firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                             ?? User.FindFirst("sub")?.Value;
-        if (string.IsNullOrEmpty(firebaseUid))
-            return Unauthorized("User not authenticated.");
-
-        // Caută user-ul în baza de date după FirebaseUid
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+        var user = await GetCurrentUserAsync();
         if (user == null)
-            return NotFound("User not found.");
+            return Unauthorized("User not authenticated or not found.");
 
         // Obține toate valorile posibile ale enum-ului LibraryShelf
         var allShelves = Enum.GetValues(typeof(LibraryShelf)).Cast<LibraryShelf>();
@@ -99,21 +93,14 @@ namespace Make_It_Stick_Backend.Controllers
     [HttpGet]
     public async Task<IActionResult> GetUserLibrary([FromQuery] LibraryShelf? libraryShelf)
     {
-        // Extrage UID-ul din token (folosind claim-ul "sub" sau ClaimTypes.NameIdentifier)
-        string firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                             ?? User.FindFirst("sub")?.Value;
-        if (string.IsNullOrEmpty(firebaseUid))
-            return Unauthorized("User not authenticated.");
-
-        // Caută utilizatorul în baza de date după FirebaseUid
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+        var user = await GetCurrentUserAsync();
         if (user == null)
-            return NotFound("User not found.");
+            return Unauthorized("User not authenticated or not found.");
 
         // Construiește query-ul pentru LibraryItems aferente user-ului
         var query = _context.LibraryItems
-            .Include(li => li.Book)
-            .Where(li => li.UserId == user.UserId);
+        .Include(li => li.Book)
+        .Where(li => li.UserId == user.UserId);
 
         // Dacă s-a specificat un LibraryShelf, filtrează rezultatul
         if (libraryShelf.HasValue)
@@ -179,16 +166,9 @@ namespace Make_It_Stick_Backend.Controllers
             if (string.IsNullOrWhiteSpace(googleBookId))
                 return BadRequest("GoogleBookId is required.");
 
-            // Extrage UID-ul din token
-            string firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                                 ?? User.FindFirst("sub")?.Value;
-            if (string.IsNullOrEmpty(firebaseUid))
-                return Unauthorized("User not authenticated.");
-
-            // Caută utilizatorul în baza de date după FirebaseUid
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+            var user = await GetCurrentUserAsync();
             if (user == null)
-                return NotFound("User not found.");
+                return Unauthorized("User not authenticated or not found.");
 
             // Găsește LibraryItem pentru cartea dată, care aparține utilizatorului curent.
             var libraryItem = await _context.LibraryItems
@@ -208,16 +188,9 @@ namespace Make_It_Stick_Backend.Controllers
         [HttpPost("AddToUserLibrary")]
         public async Task<IActionResult> AddToUserLibrary([FromBody] AddToUserLibraryDto dto)
         {
-            // Extrage UID-ul din token
-            string firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                                 ?? User.FindFirst("sub")?.Value;
-            if (string.IsNullOrEmpty(firebaseUid))
-                return Unauthorized("User not authenticated.");
-
-            // Caută utilizatorul în baza de date după FirebaseUid
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+            var user = await GetCurrentUserAsync();
             if (user == null)
-                return NotFound("User not found.");
+                return Unauthorized("User not authenticated or not found.");
 
             // Verifică dacă cartea există; dacă nu, o adaugă folosind metoda SaveBook.
             var book = await _context.Books.FirstOrDefaultAsync(b => b.GoogleBookId == dto.GoogleBookId);
@@ -318,15 +291,9 @@ namespace Make_It_Stick_Backend.Controllers
         [HttpGet("Item")]
         public async Task<IActionResult> GetLibraryItemByGoogleBookId([FromQuery] string googleBookId)
         {
-            // Extrage UID-ul din token
-            string firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                                 ?? User.FindFirst("sub")?.Value;
-            if (string.IsNullOrEmpty(firebaseUid))
-                return Unauthorized("User not authenticated.");
-
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+            var user = await GetCurrentUserAsync();
             if (user == null)
-                return NotFound("User not found.");
+                return Unauthorized("User not authenticated or not found.");
 
             var libraryItem = await _context.LibraryItems
                 .Include(li => li.Book)
@@ -337,6 +304,34 @@ namespace Make_It_Stick_Backend.Controllers
 
             return Ok(libraryItem);
         }
+
+        [Authorize]
+        [HttpGet("currently-reading")]
+        public async Task<IActionResult> GetCurrentlyReading()
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized("User not authenticated or not found.");
+
+            var items = await _context.LibraryItems
+                .Include(li => li.Book)
+                .Where(li => li.UserId == user.UserId && li.LibraryShelf == LibraryShelf.CurrentlyReading)
+                .Select(li => new {
+                    li.LibraryItemId,
+                    li.CurrentPage,
+                    TotalPages = li.TotalPages ?? li.Book.PageCount,
+                    BookId = li.Book.BookId,
+                    Title = li.Book.Title,
+                    Author = li.Book.Authors,
+                    CoverUrl = li.Book.CoverUrl
+                })
+                .ToListAsync();
+
+            return Ok(items);
+        }
+
+
+
+
 
 
 
