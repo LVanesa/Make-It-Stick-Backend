@@ -119,31 +119,72 @@ namespace Make_It_Stick_Backend.Controllers
             var goal = await _context.DailyReadingGoals
                                      .FirstOrDefaultAsync(g => g.UserId == user.UserId);
 
-            var progressToday = await _context.DailyProgresses
-                                              .FirstOrDefaultAsync(dp => dp.UserId == user.UserId && dp.Date == today);
+            int minutesPerDay = goal?.MinutesPerDay ?? 0;
 
-            // Calculează streak-ul
-            int streak = 0;
-            var yesterday = today.AddDays(-1);
+            // 1. Calculează totalul din sesiuni de lectură
+            var todaySessions = await _context.ReadingSessions
+                .Include(rs => rs.LibraryItem)
+                .Where(rs => rs.LibraryItem.UserId == user.UserId && rs.StartTime.Date == today)
+                .ToListAsync();
+
+            int minutesReadToday = todaySessions.Sum(s => s.Duration ?? 0);
+            bool goalReachedToday = minutesReadToday >= minutesPerDay;
+
+            // 2. Salvează în DailyProgress
+            var progress = await _context.DailyProgresses
+                .FirstOrDefaultAsync(dp => dp.UserId == user.UserId && dp.Date == today);
+
+            if (progress == null)
+            {
+                progress = new DailyProgress
+                {
+                    UserId = user.UserId,
+                    Date = today,
+                    TotalMinutes = minutesReadToday,
+                    GoalReached = goalReachedToday,
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdated = DateTime.UtcNow
+                };
+                _context.DailyProgresses.Add(progress);
+            }
+            else
+            {
+                progress.TotalMinutes = minutesReadToday;
+                progress.GoalReached = goalReachedToday;
+                progress.LastUpdated = DateTime.UtcNow;
+                _context.DailyProgresses.Update(progress);
+            }
+
+            // 3. Calculează streak-ul pornind de azi înapoi
+            int streak = goalReachedToday ? 1 : 0;
+            var currentDate = today.AddDays(-1);
 
             while (true)
             {
-                var entry = await _context.DailyProgresses
-                                          .FirstOrDefaultAsync(dp => dp.UserId == user.UserId && dp.Date == yesterday);
+                var sessions = await _context.ReadingSessions
+                    .Include(rs => rs.LibraryItem)
+                    .Where(rs => rs.LibraryItem.UserId == user.UserId && rs.StartTime.Date == currentDate)
+                    .ToListAsync();
 
-                if (entry == null || !entry.GoalReached) break;
+                int total = sessions.Sum(s => s.Duration ?? 0);
+                if (goal == null || total < minutesPerDay) break;
 
                 streak++;
-                yesterday = yesterday.AddDays(-1);
+                currentDate = currentDate.AddDays(-1);
             }
+
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
-                minutesPerDay = goal?.MinutesPerDay ?? 0,
-                minutesReadToday = progressToday?.TotalMinutes ?? 0,
+                minutesPerDay,
+                minutesReadToday,
+                goalReached = goalReachedToday,
                 streak
             });
         }
+
+
 
 
     }

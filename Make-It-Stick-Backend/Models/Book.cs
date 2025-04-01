@@ -21,7 +21,6 @@ namespace Make_It_Stick_Backend.Models
         public string? PublishedDate { get; set; }
         public string? Categories { get; set; }
         public string? AboutAuthor { get; set; }
-
         public string? Genre { get; set; }
     }
 }

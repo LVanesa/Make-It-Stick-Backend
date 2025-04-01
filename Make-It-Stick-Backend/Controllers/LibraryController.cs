@@ -320,6 +320,7 @@ namespace Make_It_Stick_Backend.Controllers
                     li.CurrentPage,
                     TotalPages = li.TotalPages ?? li.Book.PageCount,
                     BookId = li.Book.BookId,
+                    GoogleBookId=li.Book.GoogleBookId,
                     Title = li.Book.Title,
                     Author = li.Book.Authors,
                     CoverUrl = li.Book.CoverUrl
@@ -328,6 +329,84 @@ namespace Make_It_Stick_Backend.Controllers
 
             return Ok(items);
         }
+
+
+        [HttpPut("UpdateCurrentPage")]
+        public async Task<IActionResult> UpdateCurrentPage([FromBody] UpdatePageDto dto)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized("User not authenticated");
+
+            var item = await _context.LibraryItems
+                .Include(li => li.Book)
+                .FirstOrDefaultAsync(li => li.UserId == user.UserId && li.Book.GoogleBookId == dto.GoogleBookId);
+
+            if (item == null) return NotFound("Library item not found");
+
+            item.CurrentPage = dto.NewValue;
+            await _context.SaveChangesAsync();
+
+            return Ok(item);
+        }
+
+        [HttpPut("UpdateTotalPages")]
+        public async Task<IActionResult> UpdateTotalPages([FromBody] UpdatePageDto dto)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized("User not authenticated");
+
+            var item = await _context.LibraryItems
+                .Include(li => li.Book)
+                .FirstOrDefaultAsync(li => li.UserId == user.UserId && li.Book.GoogleBookId == dto.GoogleBookId);
+
+            if (item == null) return NotFound("Library item not found");
+
+            item.TotalPages = dto.NewValue;
+            await _context.SaveChangesAsync();
+
+            return Ok(item);
+        }
+
+        [HttpPut("UpdateShelf")]
+        public async Task<IActionResult> UpdateShelf([FromBody] UpdateShelfDto dto)
+        {
+            if (string.IsNullOrEmpty(dto.GoogleBookId))
+                return BadRequest("GoogleBookId is required.");
+
+            // 1. Găsește userul folosind token-ul
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized("User not authenticated");
+
+
+            // 2. Găsește cartea
+            var book = await _context.Books.FirstOrDefaultAsync(b => b.GoogleBookId == dto.GoogleBookId);
+            if (book == null)
+                return NotFound("Book not found.");
+
+            // 3. Găsește LibraryItem pentru user și carte
+            var libraryItem = await _context.LibraryItems
+                .FirstOrDefaultAsync(li => li.UserId == user.UserId && li.BookId == book.BookId);
+
+            if (libraryItem == null)
+                return NotFound("Library item not found.");
+
+            // 4. Update la raft și dată corespunzătoare
+            libraryItem.LibraryShelf = dto.LibraryShelf;
+
+            if (dto.LibraryShelf == LibraryShelf.CurrentlyReading)
+            {
+                libraryItem.DateStarted = DateTime.UtcNow;
+                libraryItem.DateFinished = null;
+            }
+            else if (dto.LibraryShelf == LibraryShelf.Finished || dto.LibraryShelf == LibraryShelf.Abandoned)
+            {
+                libraryItem.DateFinished = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            return Ok(libraryItem);
+        }
+
 
 
 
