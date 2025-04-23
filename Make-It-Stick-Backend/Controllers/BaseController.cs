@@ -15,14 +15,23 @@ public abstract class BaseController : ControllerBase
         _context = context;
     }
 
-    protected async Task<AppUser> GetCurrentUserAsync()
+    protected async Task<AppUser?> GetCurrentUserAsync()
     {
-        string firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                             ?? User.FindFirst("sub")?.Value;
+        string? firebaseUid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                           ?? User.FindFirst("sub")?.Value;
+
+        Console.WriteLine("🔑 Firebase UID: " + firebaseUid);
 
         if (string.IsNullOrEmpty(firebaseUid))
+        {
+            Console.WriteLine("⚠️ Firebase UID not found in token");
             return null;
+        }
 
-        return await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.FirebaseUid == firebaseUid);
+        Console.WriteLine("👤 Found user: " + user?.Email);
+
+        return user;
     }
+
 }
