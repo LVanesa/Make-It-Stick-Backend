@@ -586,6 +586,77 @@ namespace Make_It_Stick_Backend.Controllers
         }
 
 
+        [HttpPost("DiscussNotesWithAI")]
+        public async Task<IActionResult> DiscussNotesWithAI([FromBody] DiscussRequestDto dto)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized();
+
+            // 1. Fetch all notes for the user
+            var notes = await _context.Notes
+                .Include(n => n.LibraryItem)
+                    .ThenInclude(li => li.Book)
+                .Include(n => n.BaseNoteTags)
+                    .ThenInclude(t => t.Tag)
+                .Where(n => n.UserId == user.UserId)
+                .ToListAsync();
+
+            // 2. Transform into expected format
+            var noteDtos = notes.Select(n =>
+            {
+                string content = "";
+
+                switch (n)
+                {
+                    case SimpleNote simple:
+                        content = $"{simple.Title}: {simple.Content}";
+                        break;
+                    case QuoteNote quote:
+                        content = $"{quote.Quote}{(string.IsNullOrWhiteSpace(quote.comment) ? "" : $" — {quote.comment}")}";
+                        break;
+                    case FlashcardNote flash:
+                        content = $"{flash.FlashcardFront} → {flash.FlashcardBack}";
+                        break;
+                    case DefinitionNote def:
+                        content = $"{def.Word}: {def.Definition}{(string.IsNullOrWhiteSpace(def.Example) ? "" : $". Example: {def.Example}")}";
+                        break;
+                    default:
+                        content = "Unknown note content.";
+                        break;
+                }
+
+                return new
+                {
+                    note_id = n.NoteId.ToString(),
+                    book_title = n.LibraryItem.Book.Title,
+                    author = n.LibraryItem.Book.Authors ?? "Unknown",
+                    content = content,
+                };
+            }).ToList();
+
+
+            // 3. Prepare payload
+            var payload = new
+            {
+                user_id = user.UserId.ToString(),
+                question = dto.Question,
+                notes = noteDtos
+            };
+
+            // 4. Send to FastAPI server
+            using var httpClient = new HttpClient();
+            var response = await httpClient.PostAsJsonAsync("http://localhost:8000/discuss_notes", payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errText = await response.Content.ReadAsStringAsync();
+                return StatusCode((int)response.StatusCode, $"AI server error: {errText}");
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<object>(); // or define proper DTO
+            return Ok(result);
+        }
 
     }
 

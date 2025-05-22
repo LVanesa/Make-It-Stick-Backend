@@ -101,7 +101,7 @@ namespace Make_It_Stick_Backend.Migrations
 
                     b.HasIndex("TagId");
 
-                    b.ToTable("BaseNoteTag");
+                    b.ToTable("BaseNoteTags");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.Book", b =>

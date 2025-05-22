@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.ML.OnnxRuntime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -84,6 +85,14 @@ builder.Services.AddHttpClient<NYTBooksService>(client =>
 {
     client.BaseAddress = new Uri("https://api.nytimes.com/svc/books/v3/");
 });
+
+// serviciile pentru Serverul pe care ruleaza modelul de generare de tag-uri
+builder.Services.AddHttpClient("FastApi", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:8000/"); // URL-ul unde rulează FastAPI
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
 
 
 // Adaugă serviciile necesare

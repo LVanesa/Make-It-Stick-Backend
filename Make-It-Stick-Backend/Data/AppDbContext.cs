@@ -23,6 +23,8 @@ namespace Make_It_Stick_Backend.Data
         public DbSet<DefinitionNote> DefinitionNotes { get; set; } = default!;
         public DbSet<FlashcardNote> FlashcardNotes { get; set; } = default!;
         public DbSet<Tag> Tags { get; set; } = default!;
+        public DbSet<BaseNoteTag> BaseNoteTags { get; set; } = default!;
+
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -103,7 +105,8 @@ namespace Make_It_Stick_Backend.Data
             modelBuilder.Entity<BaseNoteTag>()
                 .HasOne(nt => nt.Note)
                 .WithMany(n => n.BaseNoteTags)
-                .HasForeignKey(nt => nt.NoteId);
+                .HasForeignKey(nt => nt.NoteId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<BaseNoteTag>()
                 .HasOne(nt => nt.Tag)
