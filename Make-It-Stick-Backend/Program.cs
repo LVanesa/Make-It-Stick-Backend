@@ -5,6 +5,8 @@ using Make_It_Stick_Backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using Microsoft.ML.OnnxRuntime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -84,6 +86,14 @@ builder.Services.AddHttpClient<NYTBooksService>(client =>
     client.BaseAddress = new Uri("https://api.nytimes.com/svc/books/v3/");
 });
 
+// serviciile pentru Serverul pe care ruleaza modelul de generare de tag-uri
+builder.Services.AddHttpClient("FastApi", client =>
+{
+    client.BaseAddress = new Uri("http://localhost:8000/"); // URL-ul unde rulează FastAPI
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
+
+
 
 // Adaugă serviciile necesare
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -93,7 +103,34 @@ builder.Services.AddControllers().AddJsonOptions(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    // Alte setări Swagger...
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: 'Bearer YOUR_TOKEN_HERE'",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
+});
+
 
 var app = builder.Build();
 

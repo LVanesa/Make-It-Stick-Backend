@@ -35,6 +35,8 @@ namespace Make_It_Stick_Backend.Models
          
         // Navigare către sesiunile de lectură asociate acestei cărți
         public ICollection<ReadingSession>? ReadingSessions { get; set; }
+        public ICollection<BaseNote>? Notes { get; set; }
+
 
     }
 }

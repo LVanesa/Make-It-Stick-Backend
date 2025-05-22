@@ -19,5 +19,10 @@ namespace Make_It_Stick_Backend.Models
         public ICollection<YearlyReadingGoal>? YearlyReadingGoals { get; set; }
         public DailyReadingGoal DailyReadingGoal { get; set; } 
         public ICollection<DailyProgress>? DailyProgresses { get; set; }
+
+
+        public ICollection<BaseNote>? Notes { get; set; }
+        public ICollection<Tag> Tags { get; set; } = new List<Tag>();
+
     }
 }

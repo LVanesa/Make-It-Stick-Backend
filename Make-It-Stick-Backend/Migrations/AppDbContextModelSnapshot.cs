@@ -51,6 +51,59 @@ namespace Make_It_Stick_Backend.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.BaseNote", b =>
+                {
+                    b.Property<int>("NoteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("NoteId"), 1L, 1);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsFavorite")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LibraryItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NoteType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NoteId");
+
+                    b.HasIndex("LibraryItemId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Notes");
+
+                    b.HasDiscriminator<string>("NoteType").HasValue("BaseNote");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.BaseNoteTag", b =>
+                {
+                    b.Property<int>("NoteId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("int");
+
+                    b.HasKey("NoteId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("BaseNoteTags");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.Book", b =>
                 {
                     b.Property<int>("BookId")
@@ -252,6 +305,28 @@ namespace Make_It_Stick_Backend.Migrations
                     b.ToTable("ReadingSessions");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.Tag", b =>
+                {
+                    b.Property<int>("TagId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("TagId"), 1L, 1);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("TagId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Tags");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
                 {
                     b.Property<int>("Id")
@@ -283,6 +358,105 @@ namespace Make_It_Stick_Backend.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("YearlyReadingGoals");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.DefinitionNote", b =>
+                {
+                    b.HasBaseType("Make_It_Stick_Backend.Models.BaseNote");
+
+                    b.Property<string>("Definition")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Example")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasDiscriminator().HasValue("Definition");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.FlashcardNote", b =>
+                {
+                    b.HasBaseType("Make_It_Stick_Backend.Models.BaseNote");
+
+                    b.Property<string>("FlashcardBack")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FlashcardFront")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasDiscriminator().HasValue("Flashcard");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.QuoteNote", b =>
+                {
+                    b.HasBaseType("Make_It_Stick_Backend.Models.BaseNote");
+
+                    b.Property<string>("Quote")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("comment")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasDiscriminator().HasValue("Quote");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.SimpleNote", b =>
+                {
+                    b.HasBaseType("Make_It_Stick_Backend.Models.BaseNote");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasDiscriminator().HasValue("Simple");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.BaseNote", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.LibraryItem", "LibraryItem")
+                        .WithMany("Notes")
+                        .HasForeignKey("LibraryItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
+                        .WithMany("Notes")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LibraryItem");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.BaseNoteTag", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.BaseNote", "Note")
+                        .WithMany("BaseNoteTags")
+                        .HasForeignKey("NoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Make_It_Stick_Backend.Models.Tag", "Tag")
+                        .WithMany("BaseNoteTags")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Note");
+
+                    b.Navigation("Tag");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.Book", b =>
@@ -344,6 +518,17 @@ namespace Make_It_Stick_Backend.Migrations
                     b.Navigation("LibraryItem");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.Tag", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
+                        .WithMany("Tags")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>
                 {
                     b.HasOne("Make_It_Stick_Backend.Models.AppUser", "User")
@@ -364,12 +549,28 @@ namespace Make_It_Stick_Backend.Migrations
 
                     b.Navigation("LibraryItems");
 
+                    b.Navigation("Notes");
+
+                    b.Navigation("Tags");
+
                     b.Navigation("YearlyReadingGoals");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.BaseNote", b =>
+                {
+                    b.Navigation("BaseNoteTags");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.LibraryItem", b =>
                 {
+                    b.Navigation("Notes");
+
                     b.Navigation("ReadingSessions");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.Tag", b =>
+                {
+                    b.Navigation("BaseNoteTags");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.YearlyReadingGoal", b =>

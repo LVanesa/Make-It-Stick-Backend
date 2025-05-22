@@ -363,4 +363,5 @@ MigrationBackup/
 FodyWeavers.xsd
 
 Make-It-Stick-Backend/Config/firebase_credentials.json
+Make-It-Stick-Backend/Config/google_vision_credentials.json
 Make-It-Stick-Backend/secrets.json

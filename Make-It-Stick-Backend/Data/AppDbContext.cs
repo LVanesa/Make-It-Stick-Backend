@@ -16,6 +16,17 @@ namespace Make_It_Stick_Backend.Data
         public DbSet<ReadingSession> ReadingSessions { get; set; }
         public DbSet<DailyReadingGoal> DailyReadingGoals { get; set; }
         public DbSet<DailyProgress> DailyProgresses { get; set; }
+
+        public DbSet<BaseNote> Notes { get; set; } = default!;
+        public DbSet<SimpleNote> SimpleNotes { get; set; } = default!;
+        public DbSet<QuoteNote> QuoteNotes { get; set; } = default!;
+        public DbSet<DefinitionNote> DefinitionNotes { get; set; } = default!;
+        public DbSet<FlashcardNote> FlashcardNotes { get; set; } = default!;
+        public DbSet<Tag> Tags { get; set; } = default!;
+        public DbSet<BaseNoteTag> BaseNoteTags { get; set; } = default!;
+
+
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // Configurări suplimentare, dacă este necesar
@@ -68,6 +79,52 @@ namespace Make_It_Stick_Backend.Data
             modelBuilder.Entity<DailyProgress>()
                 .HasIndex(dp => new { dp.UserId, dp.Date })
                 .IsUnique();
+
+            modelBuilder.Entity<BaseNote>()
+                .HasDiscriminator<string>("NoteType")
+                .HasValue<SimpleNote>("Simple")
+                .HasValue<QuoteNote>("Quote")
+                .HasValue<DefinitionNote>("Definition")
+                .HasValue<FlashcardNote>("Flashcard");
+
+            modelBuilder.Entity<BaseNote>()
+                .HasOne(n => n.LibraryItem)
+                .WithMany(li => li.Notes)
+                .HasForeignKey(n => n.LibraryItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AppUser>()
+                .HasMany(u => u.Notes)
+                .WithOne(n => n.User)
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<BaseNoteTag>()
+                .HasKey(nt => new { nt.NoteId, nt.TagId });
+
+            modelBuilder.Entity<BaseNoteTag>()
+                .HasOne(nt => nt.Note)
+                .WithMany(n => n.BaseNoteTags)
+                .HasForeignKey(nt => nt.NoteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<BaseNoteTag>()
+                .HasOne(nt => nt.Tag)
+                .WithMany(t => t.BaseNoteTags)
+                .HasForeignKey(nt => nt.TagId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+
+            modelBuilder.Entity<Tag>()
+                .HasOne(t => t.User)
+                .WithMany(u => u.Tags) 
+                .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+
+
+
+
         }
 
     }
