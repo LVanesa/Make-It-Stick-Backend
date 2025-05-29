@@ -16,7 +16,6 @@ namespace Make_It_Stick_Backend.Data
         public DbSet<ReadingSession> ReadingSessions { get; set; }
         public DbSet<DailyReadingGoal> DailyReadingGoals { get; set; }
         public DbSet<DailyProgress> DailyProgresses { get; set; }
-
         public DbSet<BaseNote> Notes { get; set; } = default!;
         public DbSet<SimpleNote> SimpleNotes { get; set; } = default!;
         public DbSet<QuoteNote> QuoteNotes { get; set; } = default!;
@@ -24,8 +23,8 @@ namespace Make_It_Stick_Backend.Data
         public DbSet<FlashcardNote> FlashcardNotes { get; set; } = default!;
         public DbSet<Tag> Tags { get; set; } = default!;
         public DbSet<BaseNoteTag> BaseNoteTags { get; set; } = default!;
-
-
+        public DbSet<QuizQandA> QuizQuestions { get; set; } = default!;
+        public DbSet<QuizReview> QuizReviews { get; set; } = default!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -114,16 +113,38 @@ namespace Make_It_Stick_Backend.Data
                 .HasForeignKey(nt => nt.TagId)
                 .OnDelete(DeleteBehavior.NoAction);
 
-
             modelBuilder.Entity<Tag>()
                 .HasOne(t => t.User)
                 .WithMany(u => u.Tags) 
                 .HasForeignKey(t => t.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // QuizQandA → BaseNote
+            modelBuilder.Entity<QuizQandA>()
+                .HasOne(q => q.Note)
+                .WithMany()
+                .HasForeignKey(q => q.NoteId)
+                .OnDelete(DeleteBehavior.Cascade);
 
+            // QuizReview → QuizQandA
+            modelBuilder.Entity<QuizReview>()
+                .HasOne(r => r.QuizQandA)
+                .WithMany(q => q.Reviews)
+                .HasForeignKey(r => r.QuizQandAId)
+                .OnDelete(DeleteBehavior.Cascade);
 
+            // Index pentru interogare eficientă a cardurilor zilnice
+            modelBuilder.Entity<QuizQandA>()
+                .HasIndex(q => q.NextReviewDate);
 
+            // Enum mapping (opțional)
+            modelBuilder.Entity<QuizReview>()
+                .Property(r => r.Rating)
+                .HasConversion<int>();
+
+            modelBuilder.Entity<QuizQandA>()
+                .Property(q => q.LastRating)
+                .HasConversion<int>();
 
         }
 

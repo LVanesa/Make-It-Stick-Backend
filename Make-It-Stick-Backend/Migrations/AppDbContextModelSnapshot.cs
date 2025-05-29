@@ -266,6 +266,88 @@ namespace Make_It_Stick_Backend.Migrations
                     b.ToTable("LibraryItems");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.QuizQandA", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("Difficulty")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsNew")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastRating")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastReviewDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("NextReviewDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("NoteId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("Stability")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextReviewDate");
+
+                    b.HasIndex("NoteId");
+
+                    b.ToTable("QuizQuestions");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.QuizReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<double>("DifficultyAfter")
+                        .HasColumnType("float");
+
+                    b.Property<int>("IntervalAfter")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuizQandAId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double>("StabilityAfter")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuizQandAId");
+
+                    b.ToTable("QuizReviews");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.ReadingSession", b =>
                 {
                     b.Property<int>("ReadingSessionId")
@@ -507,6 +589,28 @@ namespace Make_It_Stick_Backend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.QuizQandA", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.BaseNote", "Note")
+                        .WithMany()
+                        .HasForeignKey("NoteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Note");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.QuizReview", b =>
+                {
+                    b.HasOne("Make_It_Stick_Backend.Models.QuizQandA", "QuizQandA")
+                        .WithMany("Reviews")
+                        .HasForeignKey("QuizQandAId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuizQandA");
+                });
+
             modelBuilder.Entity("Make_It_Stick_Backend.Models.ReadingSession", b =>
                 {
                     b.HasOne("Make_It_Stick_Backend.Models.LibraryItem", "LibraryItem")
@@ -566,6 +670,11 @@ namespace Make_It_Stick_Backend.Migrations
                     b.Navigation("Notes");
 
                     b.Navigation("ReadingSessions");
+                });
+
+            modelBuilder.Entity("Make_It_Stick_Backend.Models.QuizQandA", b =>
+                {
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("Make_It_Stick_Backend.Models.Tag", b =>
