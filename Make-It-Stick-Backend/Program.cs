@@ -51,6 +51,7 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader();
     });
 });
+builder.Services.AddScoped<IKnowledgeGraphService, KnowledgeGraphService>();
 
 var firebaseApiKey = builder.Configuration["Firebase:ApiKey"];
 var googleBooksApiKey = builder.Configuration["GoogleBooks:ApiKey"];
