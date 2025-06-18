@@ -1,13 +1,16 @@
 ﻿using FirebaseAdmin.Auth;
+using Google.Api;
 using Make_It_Stick_Backend.Data;
 using Make_It_Stick_Backend.Models;
 using Make_It_Stick_Backend.Models.Requests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using static OpenCvSharp.ML.DTrees;
 
 namespace Make_It_Stick_Backend.Controllers
@@ -24,6 +27,43 @@ namespace Make_It_Stick_Backend.Controllers
             _httpClient = new HttpClient();
         }
 
+      
+
+        // Funcția de curățare a textului
+        private static string CleanTextForProcessing(string input)
+            {
+                if (string.IsNullOrEmpty(input))
+                    return string.Empty;
+
+                // 1. Normalizează spațiile
+                // Înlocuiește orice secvență de whitespace cu un singur spațiu
+                string cleaned = Regex.Replace(input, @"\s+", " ");
+
+                // 2. Elimină spațiile de la începutul și sfârșitul textului
+                cleaned = cleaned.Trim();
+
+                // 3. Elimină caracterele de control (excepție: \n, \r, \t)
+                cleaned = Regex.Replace(cleaned, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "");
+
+                // 4. Elimină caracterele care pot cauza probleme în JSON
+                // Păstrează doar caracterele printabile și whitespace basic
+                cleaned = Regex.Replace(cleaned, @"[^\u0020-\u007E\u00A0-\uFFFF\n\r\t]", "");
+
+                // 5. Înlocuiește ghilimelele problematice cu variante standard
+                cleaned = cleaned.Replace("'", "'").Replace("'", "'");
+
+                // 6. Elimină secvențele de newline excesive
+                cleaned = Regex.Replace(cleaned, @"\n{3,}", "\n\n");
+
+                // 7. Truncate dacă textul este prea lung (opțional)
+                const int maxLength = 10000; // Ajustează după necesități
+                if (cleaned.Length > maxLength)
+                {
+                    cleaned = cleaned.Substring(0, maxLength) + "...";
+                }
+                return cleaned;
+            }
+
         [HttpPost("generateQuestion")]
         public async Task<IActionResult> GenerateQuestion([FromBody] GenerateQuestionRequest request)
         {
@@ -32,8 +72,6 @@ namespace Make_It_Stick_Backend.Controllers
                 return Unauthorized("User not authenticated or not found.");
 
             int userId = user.UserId;
-
-
             var baseNote = await _context.Notes
                 .Include(n => n.BaseNoteTags)
                 .ThenInclude(t => t.Tag)
@@ -42,7 +80,7 @@ namespace Make_It_Stick_Backend.Controllers
             if (baseNote == null)
                 return NotFound("Note not found");
 
-            string textContent = baseNote switch
+            string rawTextContent = baseNote switch
             {
                 SimpleNote simple => $"{simple.Title}\n {simple.Content}",
                 QuoteNote quote => $"Quote: {quote.Quote}\n Comment: {quote.comment}",
@@ -51,16 +89,30 @@ namespace Make_It_Stick_Backend.Controllers
                 _ => throw new InvalidOperationException("Unsupported note type")
             };
 
+            // Curăță textul înainte de trimitere
+            string cleanedTextContent = CleanTextForProcessing(rawTextContent);
+
+            // Verifică dacă textul curățat nu este gol
+            if (string.IsNullOrWhiteSpace(cleanedTextContent))
+            {
+                return BadRequest("Text content is empty after cleaning");
+            }
+
             var payload = new
             {
-                text = textContent
+                text = cleanedTextContent
             };
 
-            var jsonContent = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(payload, new JsonSerializerOptions
+                {
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                }),
+                Encoding.UTF8,"application/json");
 
             try
             {
-                var response = await _httpClient.PostAsync("http://localhost:8000/generate_question", jsonContent); // ruta spre FastAPI
+                var response = await _httpClient.PostAsync("http://localhost:8000/generate_question", jsonContent);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -77,7 +129,7 @@ namespace Make_It_Stick_Backend.Controllers
             }
         }
 
-        [HttpPost("create")]
+    [HttpPost("create")]
         public async Task<IActionResult> CreateQuizQandA([FromBody] CreateQuizQuestionRequest request)
         {
             var user = await GetCurrentUserAsync();

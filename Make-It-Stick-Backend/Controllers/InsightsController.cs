@@ -67,22 +67,34 @@ namespace Make_It_Stick_Backend.Controllers
 
             var currentYear = DateTime.UtcNow.Year;
 
+            //FIRST: Check if user has a yearly reading goal
             var goal = await _context.YearlyReadingGoals
                 .Where(g => g.UserId == user.UserId && g.Year == currentYear)
                 .FirstOrDefaultAsync();
 
+            //If no goal exists, return early with appropriate message
             if (goal == null)
             {
-                return NotFound("No yearly goal found for current year.");
+                return Ok(new
+                {
+                    hasGoal = false,
+                    currentYear = currentYear,
+                    message = "Set your yearly reading goal to start tracking your progress"
+                });
             }
 
+            //GOAL EXISTS: Calculate all statistics
             var today = DateTime.UtcNow;
             var daysInYear = DateTime.IsLeapYear(today.Year) ? 366 : 365;
             var dayOfYear = today.DayOfYear;
+
+            // Safe calculation - ensure goal > 0
             var progressPercent = (double)dayOfYear / daysInYear;
+            var expectedBooksByNow = goal.TargetBooks > 0
+                ? Math.Round(goal.TargetBooks * progressPercent, 2)
+                : 0;
 
-            var expectedBooksByNow = Math.Round(goal.TargetBooks * progressPercent, 2);
-
+            // Count finished books for current year
             var booksFinished = await _context.LibraryItems
                 .Where(b => b.UserId == user.UserId
                     && b.LibraryShelf == LibraryShelf.Finished
@@ -90,24 +102,120 @@ namespace Make_It_Stick_Backend.Controllers
                     && b.DateFinished.Value.Year == currentYear)
                 .CountAsync();
 
+            // Safe difference calculation
             var difference = Math.Round(booksFinished - expectedBooksByNow, 2);
+
+            // Improved pace status logic
             var paceStatus = difference switch
             {
-                > 0 => "ahead",
-                0 => "on-track",
+                > 0.5 => "ahead",
+                >= -0.5 and <= 0.5 => "on-track",
                 _ => "behind"
             };
 
+            // Calculate monthly breakdown for enhanced statistics
+            var monthlyData = new List<object>();
+            for (int month = 1; month <= 12; month++)
+            {
+                var monthlyTarget = Math.Round((double)goal.TargetBooks / 12 * month, 1);
+
+                // Count books finished up to this month
+                var booksFinishedUpToMonth = await _context.LibraryItems
+                    .Where(b => b.UserId == user.UserId
+                        && b.LibraryShelf == LibraryShelf.Finished
+                        && b.DateFinished.HasValue
+                        && b.DateFinished.Value.Year == currentYear
+                        && b.DateFinished.Value.Month <= month)
+                    .CountAsync();
+
+                monthlyData.Add(new
+                {
+                    month = month,
+                    target = monthlyTarget,
+                    actual = month <= today.Month ? booksFinishedUpToMonth : (int?)null,
+                    isCurrentMonth = month == today.Month,
+                    isPastMonth = month < today.Month
+                });
+            }
+
+            // Calculate reading pace metrics
+            var currentMonth = today.Month;
+            var monthsElapsed = currentMonth;
+            var currentPace = monthsElapsed > 0 ? Math.Round((double)booksFinished / monthsElapsed, 2) : 0;
+
+            var monthsRemaining = 12 - currentMonth;
+            var booksRemaining = Math.Max(0, goal.TargetBooks - booksFinished);
+            var requiredPace = monthsRemaining > 0 ? Math.Round((double)booksRemaining / monthsRemaining, 2) : 0;
+
+            // Overall progress percentage
+            var overallProgress = goal.TargetBooks > 0
+                ? Math.Round((double)booksFinished / goal.TargetBooks * 100, 1)
+                : 0;
+
+            // Time-based expectations
+            var expectedProgress = Math.Round(progressPercent * 100, 1); // Percentage of year elapsed
+
             return Ok(new
             {
+                hasGoal = true,
                 yearGoal = goal.TargetBooks,
+                currentYear = currentYear,
                 booksFinished = booksFinished,
                 expectedBooksByNow = expectedBooksByNow,
                 paceStatus = paceStatus,
-                difference = difference
+                difference = difference,
+
+                // Enhanced metrics
+                monthlyData = monthlyData,
+                currentPace = currentPace,
+                requiredPace = requiredPace,
+                overallProgress = overallProgress,
+                expectedProgress = expectedProgress,
+
+                // Additional insights
+                monthsElapsed = monthsElapsed,
+                monthsRemaining = monthsRemaining,
+                booksRemaining = booksRemaining,
+
+                // Status flags
+                isAhead = difference > 0.5,
+                isBehind = difference < -0.5,
+                isOnTrack = difference >= -0.5 && difference <= 0.5
             });
         }
 
+        // BONUS: Endpoint pentru yearly goals management
+        [HttpGet("yearly-goals")]
+        [Authorize]
+        public async Task<IActionResult> GetYearlyGoals()
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized("User not authenticated or not found.");
+
+            var goals = await _context.YearlyReadingGoals
+                .Where(g => g.UserId == user.UserId)
+                .OrderByDescending(g => g.Year)
+                .ToListAsync();
+
+            var currentYear = DateTime.UtcNow.Year;
+            var hasCurrentYearGoal = goals.Any(g => g.Year == currentYear);
+
+            return Ok(new
+            {
+                hasCurrentYearGoal = hasCurrentYearGoal,
+                currentYear = currentYear,
+                goals = goals.Select(g => new
+                {
+                    g.Id,
+                    g.Year,
+                    g.TargetBooks,
+                    g.CreatedAt
+                }).ToList()
+            });
+        }
+
+       
 
         [HttpGet("daily-reading-progress")]
         public async Task<IActionResult> GetDailyReadingProgress()
@@ -116,16 +224,26 @@ namespace Make_It_Stick_Backend.Controllers
             if (user == null)
                 return Unauthorized("User not authenticated or not found.");
 
+            // FIRST: Check if user has a daily reading goal
+            var goalEntity = await _context.DailyReadingGoals.FirstOrDefaultAsync(g => g.UserId == user.UserId);
+
+            // If no goal exists, return early with appropriate message
+            if (goalEntity == null)
+            {
+                return Ok(new
+                {
+                    hasGoal = false,
+                    message = "Set your daily reading goal to start tracking your progress"
+                });
+            }
+
+            int goal = goalEntity.MinutesPerDay;
             var today = DateTime.UtcNow.Date;
 
             // Start of week = Monday
             var diff = ((int)today.DayOfWeek + 6) % 7;
             var startOfWeek = today.AddDays(-diff);
             var startOfMonth = new DateTime(today.Year, today.Month, 1);
-
-            var goalEntity = await _context.DailyReadingGoals.FirstOrDefaultAsync(g => g.UserId == user.UserId);
-
-            int goal = goalEntity?.MinutesPerDay ?? 0;
 
             // Fetch progresses from this month
             var dailyProgresses = await _context.DailyProgresses
@@ -154,109 +272,127 @@ namespace Make_It_Stick_Backend.Controllers
                     day = date.ToString("ddd"),
                     goal,
                     actual,
-                    completed = actual >= goal
+                    completed = actual >= goal && goal > 0 // 🔥 Only completed if goal > 0
                 };
             }).ToList();
 
-            // Monthly stats
-            int daysCompleted = dailyProgresses.Count(dp => dp.TotalMinutes >= goal);
+            // Monthly stats - Fixed calculations
+            int daysCompleted = goal > 0 ? dailyProgresses.Count(dp => dp.TotalMinutes >= goal) : 0;
             int totalDays = (today - startOfMonth).Days + 1;
             int activeDays = dailyProgresses.Count(dp => dp.TotalMinutes > 0);
             int totalMinutesRead = dailyProgresses.Sum(dp => dp.TotalMinutes);
+
+            // Only calculate averages if there are active days
             int avgDailyAllDays = totalDays > 0 ? totalMinutesRead / totalDays : 0;
             int avgDailyActiveDays = activeDays > 0 ? totalMinutesRead / activeDays : 0;
 
-            // Calculate most productive time based on reading sessions
-            var morningMinutes = readingSessions
-                .Where(rs => rs.StartTime.Hour >= 6 && rs.StartTime.Hour < 12)
-                .Sum(rs => rs.Duration ?? 0);
-
-            var afternoonMinutes = readingSessions
-                .Where(rs => rs.StartTime.Hour >= 12 && rs.StartTime.Hour < 18)
-                .Sum(rs => rs.Duration ?? 0);
-
-            var eveningMinutes = readingSessions
-                .Where(rs => rs.StartTime.Hour >= 18 || rs.StartTime.Hour < 6)
-                .Sum(rs => rs.Duration ?? 0);
-
+            // Calculate productivity breakdown only if there are sessions
+            var productivityBreakdown = new { morning = 0, afternoon = 0, evening = 0 };
             string mostProductiveTime = "morning"; // default
-            var maxMinutes = Math.Max(morningMinutes, Math.Max(afternoonMinutes, eveningMinutes));
 
-            if (maxMinutes > 0)
+            if (readingSessions.Any())
             {
-                if (afternoonMinutes == maxMinutes)
-                    mostProductiveTime = "afternoon";
-                else if (eveningMinutes == maxMinutes)
-                    mostProductiveTime = "evening";
-                // else stays "morning"
+                var morningMinutes = readingSessions
+                    .Where(rs => rs.StartTime.Hour >= 6 && rs.StartTime.Hour < 12)
+                    .Sum(rs => rs.Duration ?? 0);
+
+                var afternoonMinutes = readingSessions
+                    .Where(rs => rs.StartTime.Hour >= 12 && rs.StartTime.Hour < 18)
+                    .Sum(rs => rs.Duration ?? 0);
+
+                var eveningMinutes = readingSessions
+                    .Where(rs => rs.StartTime.Hour >= 18 || rs.StartTime.Hour < 6)
+                    .Sum(rs => rs.Duration ?? 0);
+
+                productivityBreakdown = new
+                {
+                    morning = morningMinutes,
+                    afternoon = afternoonMinutes,
+                    evening = eveningMinutes
+                };
+
+                // Determine most productive time only if there's actual data
+                var maxMinutes = Math.Max(morningMinutes, Math.Max(afternoonMinutes, eveningMinutes));
+                if (maxMinutes > 0)
+                {
+                    if (afternoonMinutes == maxMinutes)
+                        mostProductiveTime = "afternoon";
+                    else if (eveningMinutes == maxMinutes)
+                        mostProductiveTime = "evening";
+                    // else stays "morning"
+                }
             }
 
-            // Current streak
+            // FIXED: Current streak calculation - only if goal exists and > 0
             int streak = 0;
-            for (int i = 0; i < 100; i++)
+            if (goal > 0)
             {
-                var date = today.AddDays(-i);
-                var dp = dailyProgresses.FirstOrDefault(d => d.Date.Date == date);
-                if (dp != null && dp.TotalMinutes >= goal)
-                    streak++;
-                else
-                    break;
-            }
-
-            // Best streak (all time)
-            var allProgresses = await _context.DailyProgresses
-                .Where(dp => dp.UserId == user.UserId)
-                .OrderBy(dp => dp.Date)
-                .ToListAsync();
-
-            int bestStreak = 0, currentStreak = 0;
-            DateTime? lastDate = null;
-
-            foreach (var dp in allProgresses)
-            {
-                if (dp.TotalMinutes >= goal)
+                for (int i = 0; i < 100; i++)
                 {
-                    if (lastDate == null || (dp.Date - lastDate.Value).Days == 1)
-                        currentStreak++;
+                    var date = today.AddDays(-i);
+                    var dp = dailyProgresses.FirstOrDefault(d => d.Date.Date == date);
+                    if (dp != null && dp.TotalMinutes >= goal)
+                        streak++;
                     else
-                        currentStreak = 1;
-
-                    bestStreak = Math.Max(bestStreak, currentStreak);
-                    lastDate = dp.Date;
-                }
-                else
-                {
-                    currentStreak = 0;
-                    lastDate = null;
+                        break;
                 }
             }
 
-            // Calculate reading pace (pages per minute) for additional insights
+            // FIXED: Best streak calculation - only if goal exists
+            int bestStreak = 0;
+            if (goal > 0)
+            {
+                var allProgresses = await _context.DailyProgresses
+                    .Where(dp => dp.UserId == user.UserId)
+                    .OrderBy(dp => dp.Date)
+                    .ToListAsync();
+
+                int currentStreak = 0;
+                DateTime? lastDate = null;
+
+                foreach (var dp in allProgresses)
+                {
+                    if (dp.TotalMinutes >= goal)
+                    {
+                        if (lastDate == null || (dp.Date - lastDate.Value).Days == 1)
+                            currentStreak++;
+                        else
+                            currentStreak = 1;
+
+                        bestStreak = Math.Max(bestStreak, currentStreak);
+                        lastDate = dp.Date;
+                    }
+                    else
+                    {
+                        currentStreak = 0;
+                        lastDate = null;
+                    }
+                }
+            }
+
+            // Calculate reading pace only if there are valid sessions
+            double averageReadingPace = 0;
             var sessionsWithPages = readingSessions
                 .Where(rs => rs.PagesRead.HasValue && rs.Duration.HasValue &&
                             rs.PagesRead > 0 && rs.Duration > 0)
                 .ToList();
 
-            double averageReadingPace = 0;
             if (sessionsWithPages.Any())
             {
                 averageReadingPace = sessionsWithPages
                     .Average(rs => (double)rs.PagesRead.Value / rs.Duration.Value);
             }
 
+            // Return structured response with goal confirmation
             var result = new
             {
+                hasGoal = true,
                 todayGoal = goal,
                 todayProgress,
                 streak,
                 weeklyData,
                 mostProductiveTime,
-                productivityBreakdown = new
-                {
-                    morning = morningMinutes,
-                    afternoon = afternoonMinutes,
-                    evening = eveningMinutes
-                },
+                productivityBreakdown,
                 monthlyStats = new
                 {
                     daysCompleted,
@@ -266,12 +402,17 @@ namespace Make_It_Stick_Backend.Controllers
                     bestStreak,
                     currentMonth = today.ToString("MMMM"),
                     totalSessions = readingSessions.Count,
-                    averageReadingPace = Math.Round(averageReadingPace, 2)
+                    averageReadingPace = Math.Round(averageReadingPace, 2),
+                    // Additional helpful flags
+                    hasAnyProgress = dailyProgresses.Any(),
+                    hasAnySessions = readingSessions.Any()
                 }
             };
 
             return Ok(result);
         }
+
+
 
         [HttpGet("retention-forecast")]
         public async Task<IActionResult> GetRetentionForecast()

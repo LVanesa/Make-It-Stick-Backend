@@ -68,10 +68,6 @@ namespace Make_It_Stick_Backend.Services
         }
 
 
-
-
-
-
         /// <summary>
         /// Obține detaliile complete ale unei cărți pe baza id-ului Google Books.
         /// Returnează doar câmpurile esențiale: Titlu, Autori, Descriere, Număr de pagini, Rating, Data publicării, ISBN-uri,
