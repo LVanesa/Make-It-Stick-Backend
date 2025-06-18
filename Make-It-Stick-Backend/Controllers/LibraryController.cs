@@ -408,6 +408,140 @@ namespace Make_It_Stick_Backend.Controllers
         }
 
 
+        // Adaugă această metodă în LibraryController.cs
+
+        [HttpGet]
+        [Route("Recommendations")]
+        public async Task<IActionResult> GetRecommendations(
+            [FromQuery] string query,
+            [FromQuery] string? category = null,
+            [FromQuery] string? mood = null,
+            [FromQuery] int top_k = 10)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return BadRequest("Query parameter is required.");
+
+            try
+            {
+                using var httpClient = new HttpClient();
+
+                // Construiește request-ul către FastAPI
+                var requestBody = new
+                {
+                    query = query.Trim(),
+                    category = category == "All" ? null : category,
+                    tone = mood == "All" ? null : mood,
+                    top_k = top_k
+                };
+
+                var jsonContent = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(requestBody),
+                    System.Text.Encoding.UTF8,
+                    "application/json"
+                );
+
+                // Apelează FastAPI pentru a obține ISBN-urile
+                var fastApiResponse = await httpClient.PostAsync("http://127.0.0.1:8000/recommend/isbn", jsonContent);
+
+                if (!fastApiResponse.IsSuccessStatusCode)
+                {
+                    var errorContent = await fastApiResponse.Content.ReadAsStringAsync();
+                    return StatusCode((int)fastApiResponse.StatusCode,
+                        $"FastAPI error: {errorContent}");
+                }
+
+                var fastApiResult = await fastApiResponse.Content.ReadAsStringAsync();
+                var isbnResponse = System.Text.Json.JsonSerializer.Deserialize<FastApiIsbnResponse>(fastApiResult);
+
+                if (isbnResponse?.isbn_list == null || !isbnResponse.isbn_list.Any())
+                {
+                    return Ok(new List<object>()); // Returnează listă goală dacă nu sunt recomandări
+                }
+
+                // Convertește ISBN-urile în cărți complete folosind Google Books API
+                var books = new List<Book>();
+
+                foreach (var isbn in isbnResponse.isbn_list.Take(top_k))
+                {
+                    try
+                    {
+                        // Folosește serviciul existent pentru căutare după ISBN
+                        var searchResults = await _googleBooksService.SearchBooksByISBNAsync($"isbn:{isbn}");
+
+                        if (searchResults?.Items != null && searchResults.Items.Any())
+                        {
+                            var bookItem = searchResults.Items.First();
+
+                            // Verifică dacă cartea există deja în baza de date
+                            var existingBook = await _context.Books
+                                .FirstOrDefaultAsync(b => b.GoogleBookId == bookItem.Id);
+
+                            Book book;
+                            if (existingBook != null)
+                            {
+                                book = existingBook;
+                            }
+                            else
+                            {
+                                // Extrage ISBN-13 din industryIdentifiers
+                                string isbn13 = isbn; // Default la ISBN-ul primit
+                                if (bookItem.VolumeInfo?.IndustryIdentifiers != null)
+                                {
+                                    var isbn13Identifier = bookItem.VolumeInfo.IndustryIdentifiers
+                                        .FirstOrDefault(i => i.Type?.Equals("ISBN_13", StringComparison.OrdinalIgnoreCase) == true);
+                                    if (isbn13Identifier != null)
+                                        isbn13 = isbn13Identifier.Identifier;
+                                }
+
+                                // Creează cartea nouă dar nu o salvează în DB (doar pentru recomandări)
+                                book = new Book
+                                {
+                                    GoogleBookId = bookItem.Id,
+                                    Title = bookItem.VolumeInfo?.Title ?? "Unknown Title",
+                                    Authors = bookItem.VolumeInfo?.Authors != null
+                                        ? string.Join(", ", bookItem.VolumeInfo.Authors)
+                                        : "Unknown Author",
+                                    CoverUrl = bookItem.VolumeInfo?.ImageLinks?.Thumbnail,
+                                    ISBN13 = isbn13,
+                                    Description = TextCleaner.CleanText(bookItem.VolumeInfo?.Description),
+                                    PageCount = bookItem.VolumeInfo?.PageCount,
+                                    AverageRating = bookItem.VolumeInfo?.AverageRating,
+                                    PublishedDate = bookItem.VolumeInfo?.PublishedDate,
+                                    Categories = bookItem.VolumeInfo?.Categories != null
+                                        ? string.Join(", ", bookItem.VolumeInfo.Categories)
+                                        : null,
+                                };
+                            }
+
+                            books.Add(book);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log error dar continuă cu următoarea carte
+                        Console.WriteLine($"Error processing ISBN {isbn}: {ex.Message}");
+                    }
+                }
+
+                return Ok(books);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        // Clasă pentru deserializarea răspunsului de la FastAPI
+        public class FastApiIsbnResponse
+        {
+            public List<string> isbn_list { get; set; } = new List<string>();
+            public int total_found { get; set; }
+            public string query { get; set; } = string.Empty;
+            public string? category { get; set; }
+            public string? tone { get; set; }
+            public string? message { get; set; }
+        }
+
 
 
 

@@ -71,24 +71,64 @@ namespace Make_It_Stick_Backend.Controllers
             if (user == null)
                 return Unauthorized("User not authenticated or not found.");
 
+            // Validare input
+            if (minutesPerDay < 1 || minutesPerDay > 180)
+                return BadRequest("Daily goal must be between 1 and 180 minutes.");
+
             var goal = await _context.DailyReadingGoals
                                      .FirstOrDefaultAsync(g => g.UserId == user.UserId);
 
             if (goal == null)
                 return NotFound("No daily reading goal found.");
 
+            // Salvează goal-ul vechi pentru logging
+            int oldGoal = goal.MinutesPerDay;
+
+            // Actualizează goal-ul
             goal.MinutesPerDay = minutesPerDay;
             goal.UpdatedAt = DateTime.UtcNow;
 
             _context.DailyReadingGoals.Update(goal);
+
+            // RECALCULEAZĂ toate DailyProgress entries cu noul goal
+            var allDailyProgresses = await _context.DailyProgresses
+                .Where(dp => dp.UserId == user.UserId)
+                .ToListAsync();
+
+            int updatedRecords = 0;
+
+            foreach (var progress in allDailyProgresses)
+            {
+                // Recalculează GoalReached cu noul goal
+                bool newGoalReached = progress.TotalMinutes >= minutesPerDay;
+
+                if (progress.GoalReached != newGoalReached)
+                {
+                    progress.GoalReached = newGoalReached;
+                    progress.LastUpdated = DateTime.UtcNow;
+                    _context.DailyProgresses.Update(progress);
+                    updatedRecords++;
+                }
+            }
+
             await _context.SaveChangesAsync();
 
-            return Ok(goal);
+            // Log pentru debugging
+            Console.WriteLine($"Goal updated from {oldGoal} to {minutesPerDay} minutes. Recalculated {updatedRecords} daily progress records.");
+
+            return Ok(new
+            {
+                goal.DailyReadingGoalId,
+                goal.MinutesPerDay,
+                goal.UpdatedAt,
+                recalculatedRecords = updatedRecords,
+                message = $"Goal updated and {updatedRecords} progress records recalculated."
+            });
         }
 
-        // DELETE: api/DailyReadingGoals
-        [HttpDelete]
-        public async Task<IActionResult> DeleteDailyGoal()
+        // BONUS: Endpoint pentru recalculare manuală (useful pentru debugging)
+        [HttpPost("recalculate")]
+        public async Task<IActionResult> RecalculateAllProgress()
         {
             var user = await GetCurrentUserAsync();
             if (user == null)
@@ -98,15 +138,41 @@ namespace Make_It_Stick_Backend.Controllers
                                      .FirstOrDefaultAsync(g => g.UserId == user.UserId);
 
             if (goal == null)
-                return NotFound("No daily reading goal found.");
+                return BadRequest("No daily reading goal found. Set a goal first.");
 
-            _context.DailyReadingGoals.Remove(goal);
+            // 🔥 Recalculează toate DailyProgress entries
+            var allDailyProgresses = await _context.DailyProgresses
+                .Where(dp => dp.UserId == user.UserId)
+                .ToListAsync();
+
+            int updatedRecords = 0;
+            int totalRecords = allDailyProgresses.Count;
+
+            foreach (var progress in allDailyProgresses)
+            {
+                bool newGoalReached = progress.TotalMinutes >= goal.MinutesPerDay;
+
+                if (progress.GoalReached != newGoalReached)
+                {
+                    progress.GoalReached = newGoalReached;
+                    progress.LastUpdated = DateTime.UtcNow;
+                    _context.DailyProgresses.Update(progress);
+                    updatedRecords++;
+                }
+            }
+
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Daily reading goal deleted." });
+            return Ok(new
+            {
+                currentGoal = goal.MinutesPerDay,
+                totalRecords,
+                updatedRecords,
+                message = $"Recalculated {updatedRecords} out of {totalRecords} progress records."
+            });
         }
 
-        // GET: api/DailyReadingGoals/summary
+        // ENHANCED: GetDailyGoalSummary cu recalculare automată
         [HttpGet("summary")]
         public async Task<IActionResult> GetDailyGoalSummary()
         {
@@ -128,9 +194,9 @@ namespace Make_It_Stick_Backend.Controllers
                 .ToListAsync();
 
             int minutesReadToday = todaySessions.Sum(s => s.Duration ?? 0);
-            bool goalReachedToday = minutesReadToday >= minutesPerDay;
+            bool goalReachedToday = minutesReadToday >= minutesPerDay && minutesPerDay > 0;
 
-            // 2. Salvează în DailyProgress
+            // 2. Salvează/actualizează în DailyProgress
             var progress = await _context.DailyProgresses
                 .FirstOrDefaultAsync(dp => dp.UserId == user.UserId && dp.Date == today);
 
@@ -155,22 +221,33 @@ namespace Make_It_Stick_Backend.Controllers
                 _context.DailyProgresses.Update(progress);
             }
 
-            // 3. Calculează streak-ul pornind de azi înapoi
-            int streak = goalReachedToday ? 1 : 0;
-            var currentDate = today.AddDays(-1);
-
-            while (true)
+            // 3. Calculează streak-ul corect cu goal check
+            int streak = 0;
+            if (goal != null && minutesPerDay > 0)
             {
-                var sessions = await _context.ReadingSessions
-                    .Include(rs => rs.LibraryItem)
-                    .Where(rs => rs.LibraryItem.UserId == user.UserId && rs.StartTime.Date == currentDate)
-                    .ToListAsync();
+                // Începe cu ziua de azi doar dacă goal-ul e atins
+                if (goalReachedToday)
+                {
+                    streak = 1;
+                    var currentDate = today.AddDays(-1);
 
-                int total = sessions.Sum(s => s.Duration ?? 0);
-                if (goal == null || total < minutesPerDay) break;
+                    // Verifică zilele anterioare
+                    for (int i = 0; i < 100; i++) // limitează la 100 zile pentru performance
+                    {
+                        var dayProgress = await _context.DailyProgresses
+                            .FirstOrDefaultAsync(dp => dp.UserId == user.UserId && dp.Date == currentDate);
 
-                streak++;
-                currentDate = currentDate.AddDays(-1);
+                        if (dayProgress != null && dayProgress.TotalMinutes >= minutesPerDay)
+                        {
+                            streak++;
+                            currentDate = currentDate.AddDays(-1);
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -180,11 +257,32 @@ namespace Make_It_Stick_Backend.Controllers
                 minutesPerDay,
                 minutesReadToday,
                 goalReached = goalReachedToday,
-                streak
+                streak,
+                hasValidGoal = goal != null && minutesPerDay > 0
             });
         }
 
+        // DELETE: api/DailyReadingGoals
+        [HttpDelete]
+        public async Task<IActionResult> DeleteDailyGoal()
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized("User not authenticated or not found.");
 
+            var goal = await _context.DailyReadingGoals
+                                     .FirstOrDefaultAsync(g => g.UserId == user.UserId);
+
+            if (goal == null)
+                return NotFound("No daily reading goal found.");
+
+            _context.DailyReadingGoals.Remove(goal);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Daily reading goal deleted." });
+        }
+
+    
 
 
     }
